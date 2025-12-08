@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");   // 🔥 Added (required for ObjectId)
 const Agent = require("../models/Agent");
 const Customer = require("../models/Customer");
 
@@ -33,33 +34,26 @@ router.post("/logout", async (req, res) => {
 });
 
 /* ============================================================
-   SMART FUNCTION: GET NEXT AGENT IN ROUND-ROBIN
+   SMART FUNCTION: GET NEXT AGENT (ROUND ROBIN)
 =============================================================== */
 async function getNextAgent() {
     const onlineAgents = await Agent.find({ online: true }).sort({ _id: 1 });
     let agentPool = onlineAgents;
 
-    // If no one is online → use all agents
     if (agentPool.length === 0) {
         agentPool = await Agent.find({}).sort({ _id: 1 });
     }
 
     if (agentPool.length === 0) return null;
 
-    // Find last assigned customer
-    const lastCustomer = await Customer.findOne({})
-        .sort({ assignedAt: -1 });
-
-    // If no assigned customers yet → return first agent
+    const lastCustomer = await Customer.findOne({}).sort({ assignedAt: -1 });
     if (!lastCustomer) return agentPool[0]._id;
 
     const lastAssignedAgentId = lastCustomer.assignedTo.toString();
     const index = agentPool.findIndex(a => a._id.toString() === lastAssignedAgentId);
 
-    // If not found (rare case)
     if (index === -1) return agentPool[0]._id;
 
-    // ROUND ROBIN NEXT AGENT
     const nextIndex = (index + 1) % agentPool.length;
     return agentPool[nextIndex]._id;
 }
@@ -91,7 +85,6 @@ router.post("/assign-customer", async (req, res) => {
     }
 });
 
-
 /* ============================================================
    RETURN CUSTOMERS FOR LOGGED-IN AGENT
 =============================================================== */
@@ -99,11 +92,16 @@ router.get("/customers", async (req, res) => {
     const { agentId } = req.query;
     if (!agentId) return res.status(400).send({ error: "agentId required" });
 
-    const customers = await Customer
-        .find({ assignedTo: agentId })
-        .sort({ assignedAt: -1 });
+    try {
+        const customers = await Customer
+            .find({ assignedTo: new mongoose.Types.ObjectId(agentId) }) // 🔥 FIXED
+            .sort({ assignedAt: -1 });
 
-    res.send(customers);
+        res.send(customers);
+
+    } catch (err) {
+        res.status(500).send({ error: "Invalid agentId format" });
+    }
 });
 
 module.exports = router;
