@@ -1,4 +1,5 @@
 // server.js (FINAL - ready to paste)
+console.log("Starting server...");
 const express = require("express");
 const app = express();
 const cors = require("cors");
